@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>星動遊樂園 DEMO</title>
+<style>
+body{margin:0;font-family:"Noto Sans TC","Microsoft JhengHei","PingFang TC",system-ui,sans-serif;background:#1b1033;color:#fff;display:flex;min-height:100vh;align-items:center;justify-content:center}
+.box{background:#fff;color:#1F1F2E;border-radius:20px;padding:28px 22px;width:min(360px,90vw);box-shadow:0 10px 30px #0008;box-sizing:border-box}
+h1{font-size:20px;margin:0 0 6px}p{font-size:13px;color:#6B6B80;margin:0 0 14px;line-height:1.6}
+input{width:100%;box-sizing:border-box;font-size:18px;padding:12px;border:2px solid #D9CCF0;border-radius:12px;letter-spacing:2px}
+button{width:100%;margin-top:12px;padding:13px;font-size:16px;font-weight:700;border:0;border-radius:12px;background:#F5821F;color:#fff;cursor:pointer}
+button.ghost{background:#EFE9F8;color:#5B4A7A}button:disabled{opacity:.6}
+.err{color:#C0392B;font-size:13px;min-height:18px;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>星動遊樂園｜活動網頁 DEMO</h1>
+  <p>內部預覽，請輸入查看密碼。</p>
+  <form id="f"><input id="pw" type="password" autocomplete="current-password" placeholder="查看密碼"><button type="submit" id="go">進入</button><div class="err" id="err"></div></form>
+  <div id="ready" hidden><button id="enter">進入 DEMO</button><button class="ghost" id="clear">清除本機資料，重新輸入密碼</button></div>
+  <p style="margin:14px 0 0">DEMO 內：工作人員通關密碼 2026、簡訊驗證碼 000000，資料只存這台裝置。</p>
+</div>
+<script>
+(async () => {
+  const base = new URL("./", location.href).href, SITE = base + "site/", CACHE = "sp-demo-v1";
+  const $ = (id) => document.getElementById(id);
+  const ok = "serviceWorker" in navigator && "caches" in window && crypto.subtle;
+  if (!ok) { $("err").textContent = "這個瀏覽器不支援（需要 https 與較新的瀏覽器）。"; $("go").disabled = true; return; }
+  async function cachedReady() { try { const c = await caches.open(CACHE); return !!(await c.match(SITE + "index.html")); } catch (e) { return false; } }
+  async function ensureSW() { await navigator.serviceWorker.register("./sw.js", { scope: "./" }); await navigator.serviceWorker.ready; }
+  if (await cachedReady()) { $("f").hidden = true; $("ready").hidden = false; }
+  $("enter").onclick = async () => { await ensureSW(); location.href = SITE + "index.html"; };
+  $("clear").onclick = async () => { await caches.delete(CACHE); location.reload(); };
+  $("f").onsubmit = async (e) => {
+    e.preventDefault(); $("err").textContent = ""; $("go").disabled = true; $("go").textContent = "解密中…";
+    try {
+      const pw = $("pw").value.trim();
+      const buf = new Uint8Array(await (await fetch("demo.bin")).arrayBuffer());
+      const salt = buf.slice(0, 16), iv = buf.slice(16, 28), data = buf.slice(28);
+      const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+      const key = await crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 200000, hash: "SHA-256" }, km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+      let plain;
+      try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data); } catch (e2) { throw new Error("密碼不對，請再試一次。"); }
+      const files = JSON.parse(new TextDecoder().decode(plain));
+      const MIME = { html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", svg: "image/svg+xml", json: "application/json", txt: "text/plain; charset=utf-8", md: "text/markdown; charset=utf-8" };
+      const c = await caches.open(CACHE);
+      for (const [p, b64] of Object.entries(files)) {
+        const bin = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+        const ext = p.split(".").pop().toLowerCase();
+        await c.put(SITE + p, new Response(bin, { headers: { "Content-Type": MIME[ext] || "application/octet-stream" } }));
+      }
+      await ensureSW();
+      location.href = SITE + "index.html";
+    } catch (err) { $("err").textContent = err.message || String(err); $("go").disabled = false; $("go").textContent = "進入"; }
+  };
+})();
+</script>
+</body>
+</html>
