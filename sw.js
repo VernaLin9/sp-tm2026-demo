@@ -10,7 +10,7 @@ self.addEventListener("fetch", (e) => {
     let key = u.href; if (key.endsWith("/")) key += "index.html";
     const hit = await (await caches.open(CACHE)).match(key);
     if (hit) return hit;
-    if (e.request.mode === "navigate") return Response.redirect(base + "index.html", 302);
+    if (e.request.mode === "navigate") return Response.redirect(base + "index.html?next=" + encodeURIComponent(u.href.slice(SITE.length)), 302); // 解鎖後回到原本那一頁
     return new Response("", { status: 404 });
   })());
 });

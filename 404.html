@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>星動遊樂園 DEMO</title>
+<script>
+// 還沒解鎖的手機直接開 site/ 底下的網址（例如掃工作人員頁 QR）：帶 next 回密碼頁，解鎖後打開原本那一頁
+(function () {
+  var p = location.pathname, i = p.indexOf("/site/");
+  if (i >= 0) location.replace(p.slice(0, i + 1) + "?next=" + encodeURIComponent(p.slice(i + 6)));
+  else { var m = p.match(/^\/[^\/]+\//); location.replace(m ? m[0] : "/"); }
+})();
+</script>
+</head>
+<body></body>
+</html>
