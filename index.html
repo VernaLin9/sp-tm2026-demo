@@ -20,6 +20,7 @@ button.ghost{background:#EFE9F8;color:#5B4A7A}button:disabled{opacity:.6}
   <h1>星動遊樂園｜活動網頁 DEMO</h1>
   <p>內部預覽，請輸入查看密碼。</p>
   <p id="nexthint" hidden style="color:#5B4A7A;font-weight:700">解鎖後會直接打開工作人員頁。</p>
+  <p id="stale" hidden style="color:#C0392B;font-weight:700">有新版本，舊的已清掉，請重新輸入密碼。</p>
   <form id="f"><input id="pw" type="password" autocomplete="current-password" placeholder="查看密碼"><button type="submit" id="go">進入</button><div class="err" id="err"></div></form>
   <div id="ready" hidden><button id="enter">進入 DEMO</button><button class="ghost" id="clear">清除本機資料，重新輸入密碼</button></div>
   <p style="margin:14px 0 0">DEMO 內：工作人員通關密碼 2026、簡訊驗證碼 000000，資料只存這台裝置。</p>
@@ -38,7 +39,16 @@ button.ghost{background:#EFE9F8;color:#5B4A7A}button:disabled{opacity:.6}
   if (!ok) { $("err").textContent = "這個瀏覽器不支援（需要 https 與較新的瀏覽器）。"; $("go").disabled = true; return; }
   async function cachedReady() { try { const c = await caches.open(CACHE); return !!(await c.match(SITE + "index.html")); } catch (e) { return false; } }
   async function ensureSW() { await navigator.serviceWorker.register("./sw.js", { scope: "./" }); await navigator.serviceWorker.ready; }
-  if (await cachedReady()) { $("f").hidden = true; $("ready").hidden = false; }
+  // 版本比對：version.json 是每次重新打包都會變的碼；手機上存的是舊版就自動清掉，請使用者再輸入一次密碼
+  async function liveVersion() { try { const r = await fetch("version.json", { cache: "no-store" }); return r.ok ? String((await r.json()).v || "") : ""; } catch (e) { return ""; } }
+  async function cachedVersion() { try { const c = await caches.open(CACHE); const m = await c.match(base + "_version"); return m ? await m.text() : ""; } catch (e) { return ""; } }
+  const STALE = new URLSearchParams(location.search).get("stale") === "1";
+  const live = await liveVersion();
+  if (await cachedReady()) {
+    const cur = await cachedVersion();
+    if (STALE || (live && cur !== live)) { try { await caches.delete(CACHE); } catch (e) {} $("stale").hidden = false; }
+    else { $("f").hidden = true; $("ready").hidden = false; }
+  }
   $("enter").onclick = async () => { await ensureSW(); location.href = DEST; };
   $("clear").onclick = async () => { await caches.delete(CACHE); location.reload(); };
   $("f").onsubmit = async (e) => {
@@ -59,6 +69,7 @@ button.ghost{background:#EFE9F8;color:#5B4A7A}button:disabled{opacity:.6}
         const ext = p.split(".").pop().toLowerCase();
         await c.put(SITE + p, new Response(bin, { headers: { "Content-Type": MIME[ext] || "application/octet-stream" } }));
       }
+      if (live) await c.put(base + "_version", new Response(live, { headers: { "Content-Type": "text/plain" } }));
       await ensureSW();
       location.href = DEST;
     } catch (err) { $("err").textContent = err.message || String(err); $("go").disabled = false; $("go").textContent = "進入"; }
